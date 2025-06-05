@@ -1,5 +1,4 @@
 import 'dart:math';
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -12,19 +11,43 @@ class StatementScreen extends StatefulWidget {
 
 class _StatementScreenState extends State<StatementScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final ScrollController _scrollController = ScrollController();
+  late final TabController _tabController;
+  late final ScrollController _scrollController;
+
   bool _showAppBarTitle = false;
   String _selectedFilter = 'All';
   String _selectedSort = 'Latest';
-  final List<String> _filters = ['All', 'Income', 'Expense'];
-  final List<String> _sortOptions = ['Latest', 'Oldest', 'Highest', 'Lowest'];
+
+  // Theme constants
+  static const Color _primaryColor = Color(0xFF00FFEB);
+  static const Color _backgroundColor = Color(0xFF0F0027);
+  static const Color _containerColor = Color.fromARGB(255, 84, 88, 119);
+
+  // Filter and sort options
+  static const List<String> _filters = ['All', 'Income', 'Expense'];
+  static const List<String> _sortOptions = [
+    'Latest',
+    'Oldest',
+    'Highest',
+    'Lowest'
+  ];
+
+  // Tab configuration
+  static const List<TabConfig> _tabConfigs = [
+    TabConfig('Last 7 days', 7, 'This Week'),
+    TabConfig('Last 30 days', 30, 'This Month'),
+    TabConfig('Last 3 months', 90, 'Last 3 Months'),
+  ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _scrollController.addListener(_scrollListener);
+    _setupControllers();
+  }
+
+  void _setupControllers() {
+    _tabController = TabController(length: _tabConfigs.length, vsync: this);
+    _scrollController = ScrollController()..addListener(_scrollListener);
   }
 
   @override
@@ -35,97 +58,80 @@ class _StatementScreenState extends State<StatementScreen>
   }
 
   void _scrollListener() {
-    if (_scrollController.offset > 120 && !_showAppBarTitle) {
-      setState(() {
-        _showAppBarTitle = true;
-      });
-    } else if (_scrollController.offset <= 120 && _showAppBarTitle) {
-      setState(() {
-        _showAppBarTitle = false;
-      });
+    final shouldShow = _scrollController.offset > 120;
+    if (shouldShow != _showAppBarTitle) {
+      setState(() => _showAppBarTitle = shouldShow);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF0F0027),
+      backgroundColor: _backgroundColor,
       extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: _showAppBarTitle
-            ? const Color(0xFF0F0027).withOpacity(0.95)
-            : Colors.transparent,
-        elevation: _showAppBarTitle ? 2 : 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF00FFEB)),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: AnimatedOpacity(
-          opacity: _showAppBarTitle ? 1.0 : 0.0,
-          duration: const Duration(milliseconds: 250),
-          child: const Text(
-            'Account Statement',
-            style: TextStyle(
-              color: Color(0xFF00FFEB),
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.filter_list, color: Color(0xFF00FFEB)),
-            onPressed: () {
-              _showFilterSheet(context);
-            },
-          ),
-        ],
-      ),
-      body: NestedScrollView(
-        controller: _scrollController,
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverToBoxAdapter(
-              child: _buildHeaderSection(),
-            ),
-            SliverToBoxAdapter(
-              child: _buildTabBar(),
-            ),
-          ];
-        },
-        body: TabBarView(
-          controller: _tabController,
-          children: [
-            _buildTransactionList(7),
-            _buildTransactionList(30),
-            _buildTransactionList(90),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () {
-          _showExportOptionsDialog(context);
-        },
-        backgroundColor: const Color(0xFF00FFEB),
-        icon:
-            Icon(Icons.file_download_outlined, color: const Color(0xFF0F0027)),
-        label: Text('Export Statement',
-            style: TextStyle(color: const Color(0xFF0F0027))),
-        elevation: 4,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-      ),
+      appBar: _buildAppBar(),
+      body: _buildBody(),
+      floatingActionButton: _buildFloatingActionButton(),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerFloat,
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar() {
+    return AppBar(
+      backgroundColor: _showAppBarTitle
+          ? _backgroundColor.withOpacity(0.95)
+          : Colors.transparent,
+      elevation: _showAppBarTitle ? 2 : 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new, color: _primaryColor),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      title: AnimatedOpacity(
+        opacity: _showAppBarTitle ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 250),
+        child: const Text(
+          'Account Statement',
+          style: TextStyle(color: _primaryColor, fontWeight: FontWeight.bold),
+        ),
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.filter_list, color: _primaryColor),
+          onPressed: () => _showFilterSheet(context),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBody() {
+    return NestedScrollView(
+      controller: _scrollController,
+      headerSliverBuilder: (context, innerBoxIsScrolled) => [
+        SliverToBoxAdapter(child: _buildHeaderSection()),
+        SliverToBoxAdapter(child: _buildTabBar()),
+      ],
+      body: TabBarView(
+        controller: _tabController,
+        children: _tabConfigs
+            .map(
+              (config) => _TransactionList(
+                days: config.days,
+                selectedFilter: _selectedFilter,
+                selectedSort: _selectedSort,
+                periodText: config.periodText,
+              ),
+            )
+            .toList(),
+      ),
     );
   }
 
   Widget _buildHeaderSection() {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 100, 16, 20),
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            const Color(0xFF0F0027),
-            const Color.fromARGB(255, 84, 88, 119).withOpacity(0.9),
-          ],
+          colors: [_backgroundColor, Color.fromARGB(255, 84, 88, 119)],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
@@ -138,7 +144,7 @@ class _StatementScreenState extends State<StatementScreen>
             style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.bold,
-              color: Color(0xFF00FFEB),
+              color: _primaryColor,
             ),
           ),
           const SizedBox(height: 4),
@@ -150,101 +156,7 @@ class _StatementScreenState extends State<StatementScreen>
             ),
           ),
           const SizedBox(height: 25),
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  const Color.fromARGB(255, 84, 88, 119).withOpacity(0.8),
-                  const Color.fromARGB(255, 84, 88, 119).withOpacity(0.4),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Column(
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    _buildFinancialSummary(
-                      title: 'Income',
-                      amount: 'LKR 14,000',
-                      icon: Icons.arrow_upward,
-                      color: Colors.green,
-                    ),
-                    Container(
-                      height: 40,
-                      width: 1,
-                      color: Colors.white.withOpacity(0.2),
-                    ),
-                    _buildFinancialSummary(
-                      title: 'Expense',
-                      amount: 'LKR 7,000',
-                      icon: Icons.arrow_downward,
-                      color: Colors.red,
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildFinancialSummary({
-    required String title,
-    required String amount,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Expanded(
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 18,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.white.withOpacity(0.8),
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                amount,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-            ],
-          ),
+          const _FinancialSummaryCard(),
         ],
       ),
     );
@@ -254,86 +166,335 @@ class _StatementScreenState extends State<StatementScreen>
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 10, 16, 0),
       decoration: BoxDecoration(
-        color: const Color.fromARGB(255, 84, 88, 119).withOpacity(0.3),
+        color: _containerColor.withOpacity(0.3),
         borderRadius: BorderRadius.circular(12),
       ),
       child: TabBar(
         controller: _tabController,
         indicator: BoxDecoration(
-          color: const Color(0xFF00FFEB).withOpacity(0.2),
+          color: _primaryColor.withOpacity(0.2),
           borderRadius: BorderRadius.circular(12),
         ),
-        labelColor: const Color(0xFF00FFEB),
+        labelColor: _primaryColor,
         unselectedLabelColor: Colors.white.withOpacity(0.7),
-        tabs: const [
-          Tab(text: 'Last 7 days'),
-          Tab(text: 'Last 30 days'),
-          Tab(text: 'Last 3 months'),
-        ],
+        tabs: _tabConfigs.map((config) => Tab(text: config.label)).toList(),
       ),
     );
   }
 
-  Widget _buildTransactionList(int days) {
-    // Filter transactions based on selected options
-    List<Map<String, dynamic>> transactions = _generateTransactions(days);
+  Widget _buildFloatingActionButton() {
+    return FloatingActionButton.extended(
+      onPressed: () => _showExportOptionsDialog(context),
+      backgroundColor: _primaryColor,
+      icon: const Icon(Icons.file_download_outlined, color: _backgroundColor),
+      label: const Text('Export Statement',
+          style: TextStyle(color: _backgroundColor)),
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+    );
+  }
 
-    if (_selectedFilter != 'All') {
-      transactions = transactions
-          .where((transaction) =>
-              (_selectedFilter == 'Income' && transaction['isIncome']) ||
-              (_selectedFilter == 'Expense' && !transaction['isIncome']))
-          .toList();
-    }
+  // Modal methods
+  void _showFilterSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: _backgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => _FilterSheet(
+        selectedFilter: _selectedFilter,
+        selectedSort: _selectedSort,
+        onFiltersChanged: (filter, sort) {
+          setState(() {
+            _selectedFilter = filter;
+            _selectedSort = sort;
+          });
+        },
+      ),
+    );
+  }
 
-    // Sort transactions
-    switch (_selectedSort) {
-      case 'Latest':
-        transactions.sort((a, b) => b['date'].compareTo(a['date']));
-        break;
-      case 'Oldest':
-        transactions.sort((a, b) => a['date'].compareTo(b['date']));
-        break;
-      case 'Highest':
-        transactions.sort((a, b) => b['amount'].compareTo(a['amount']));
-        break;
-      case 'Lowest':
-        transactions.sort((a, b) => a['amount'].compareTo(b['amount']));
-        break;
-    }
+  void _showExportOptionsDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => _ExportDialog(
+        onExportSuccess: (format) => _showExportSuccess(context, format),
+      ),
+    );
+  }
+
+  void _showExportSuccess(BuildContext context, String format) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Statement exported as $format successfully!'),
+        backgroundColor: Colors.green,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        action: SnackBarAction(
+          label: 'VIEW',
+          textColor: Colors.white,
+          onPressed: () {},
+        ),
+      ),
+    );
+  }
+}
+
+// Data models
+class TabConfig {
+  const TabConfig(this.label, this.days, this.periodText);
+  final String label;
+  final int days;
+  final String periodText;
+}
+
+class TransactionData {
+  const TransactionData({
+    required this.id,
+    required this.title,
+    required this.category,
+    required this.amount,
+    required this.date,
+    required this.isIncome,
+    required this.icon,
+  });
+
+  final int id;
+  final String title;
+  final String category;
+  final double amount;
+  final DateTime date;
+  final bool isIncome;
+  final IconData icon;
+
+  Color get amountColor => isIncome ? Colors.green : Colors.red;
+  String get formattedAmount =>
+      '${isIncome ? '+' : '-'}LKR ${amount.toStringAsFixed(0)}';
+}
+
+// Reusable components
+class _FinancialSummaryCard extends StatelessWidget {
+  const _FinancialSummaryCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color.fromARGB(255, 84, 88, 119).withOpacity(0.8),
+            const Color.fromARGB(255, 84, 88, 119).withOpacity(0.4),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 10,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          const Expanded(
+            child: _FinancialSummaryItem(
+              title: 'Income',
+              amount: 'LKR 14,000',
+              icon: Icons.arrow_upward,
+              color: Colors.green,
+            ),
+          ),
+          Container(
+            height: 40,
+            width: 1,
+            color: Colors.white.withOpacity(0.2),
+          ),
+          const Expanded(
+            child: _FinancialSummaryItem(
+              title: 'Expense',
+              amount: 'LKR 7,000',
+              icon: Icons.arrow_downward,
+              color: Colors.red,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FinancialSummaryItem extends StatelessWidget {
+  const _FinancialSummaryItem({
+    required this.title,
+    required this.amount,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String amount;
+  final IconData icon;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.white.withOpacity(0.8),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              amount,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TransactionList extends StatelessWidget {
+  const _TransactionList({
+    required this.days,
+    required this.selectedFilter,
+    required this.selectedSort,
+    required this.periodText,
+  });
+
+  final int days;
+  final String selectedFilter;
+  final String selectedSort;
+  final String periodText;
+
+  @override
+  Widget build(BuildContext context) {
+    final transactions = _getFilteredAndSortedTransactions();
 
     return transactions.isEmpty
-        ? _buildEmptyState()
+        ? const _EmptyState()
         : ListView.builder(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 80),
-            itemCount: transactions.length + 1, // +1 for date groups
+            itemCount: transactions.length + 1,
             itemBuilder: (context, index) {
               if (index == 0) {
-                return _buildDateGroup(days);
+                return _DateGroupHeader(
+                  periodText: periodText,
+                  selectedFilter: selectedFilter,
+                );
               }
-
-              final transaction = transactions[index - 1];
-              return _buildTransactionCard(transaction);
+              return _TransactionCard(transaction: transactions[index - 1]);
             },
           );
   }
 
-  Widget _buildDateGroup(int days) {
-    String periodText;
-    switch (days) {
-      case 7:
-        periodText = 'This Week';
-        break;
-      case 30:
-        periodText = 'This Month';
-        break;
-      case 90:
-        periodText = 'Last 3 Months';
-        break;
-      default:
-        periodText = 'All Transactions';
+  List<TransactionData> _getFilteredAndSortedTransactions() {
+    var transactions = _generateTransactions(days);
+
+    // Apply filter
+    if (selectedFilter != 'All') {
+      transactions = transactions
+          .where((t) =>
+              (selectedFilter == 'Income' && t.isIncome) ||
+              (selectedFilter == 'Expense' && !t.isIncome))
+          .toList();
     }
 
+    // Apply sort
+    switch (selectedSort) {
+      case 'Latest':
+        transactions.sort((a, b) => b.date.compareTo(a.date));
+        break;
+      case 'Oldest':
+        transactions.sort((a, b) => a.date.compareTo(b.date));
+        break;
+      case 'Highest':
+        transactions.sort((a, b) => b.amount.compareTo(a.amount));
+        break;
+      case 'Lowest':
+        transactions.sort((a, b) => a.amount.compareTo(b.amount));
+        break;
+    }
+
+    return transactions;
+  }
+
+  List<TransactionData> _generateTransactions(int days) {
+    final now = DateTime.now();
+    final random = Random();
+    final List<TransactionData> transactions = [];
+
+    final incomeTypes = [
+      ('Salary', Icons.attach_money),
+      ('Freelance', Icons.work),
+      ('Investment', Icons.trending_up),
+    ];
+
+    final expenseTypes = [
+      ('Groceries', Icons.shopping_cart),
+      ('Transport', Icons.directions_bus),
+      ('Utilities', Icons.electrical_services),
+      ('Entertainment', Icons.movie),
+    ];
+
+    for (int i = 0; i < 20; i++) {
+      final date = now.subtract(Duration(days: random.nextInt(days)));
+      final isIncome = random.nextBool();
+      final types = isIncome ? incomeTypes : expenseTypes;
+      final selectedType = types[random.nextInt(types.length)];
+
+      transactions.add(TransactionData(
+        id: i + 1,
+        title: selectedType.$1,
+        category: isIncome ? 'Income' : 'Expense',
+        amount: (random.nextInt(5000) + 1000).toDouble(),
+        date: date,
+        isIncome: isIncome,
+        icon: selectedType.$2,
+      ));
+    }
+
+    return transactions;
+  }
+}
+
+class _DateGroupHeader extends StatelessWidget {
+  const _DateGroupHeader({
+    required this.periodText,
+    required this.selectedFilter,
+  });
+
+  final String periodText;
+  final String selectedFilter;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Row(
@@ -356,18 +517,15 @@ class _StatementScreenState extends State<StatementScreen>
             child: Row(
               children: [
                 Text(
-                  _selectedFilter,
+                  selectedFilter,
                   style: TextStyle(
                     fontSize: 12,
                     color: Colors.white.withOpacity(0.9),
                   ),
                 ),
                 const SizedBox(width: 8),
-                const Icon(
-                  Icons.arrow_drop_down,
-                  color: Color(0xFF00FFEB),
-                  size: 16,
-                ),
+                const Icon(Icons.arrow_drop_down,
+                    color: Color(0xFF00FFEB), size: 16),
               ],
             ),
           ),
@@ -375,11 +533,16 @@ class _StatementScreenState extends State<StatementScreen>
       ),
     );
   }
+}
 
-  Widget _buildTransactionCard(Map<String, dynamic> transaction) {
-    final isIncome = transaction['isIncome'];
+class _TransactionCard extends StatelessWidget {
+  const _TransactionCard({required this.transaction});
+
+  final TransactionData transaction;
+
+  @override
+  Widget build(BuildContext context) {
     final formatter = DateFormat('MMM dd, yyyy');
-    final formattedDate = formatter.format(transaction['date']);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -391,37 +554,30 @@ class _StatementScreenState extends State<StatementScreen>
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            _showTransactionDetails(context, transaction);
-          },
+          onTap: () => _showTransactionDetails(context, transaction),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Category icon
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isIncome
-                        ? Colors.green.withOpacity(0.2)
-                        : Colors.red.withOpacity(0.2),
+                    color: transaction.amountColor.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Icon(
-                    transaction['icon'],
-                    color: isIncome ? Colors.green : Colors.red,
+                    transaction.icon,
+                    color: transaction.amountColor,
                     size: 20,
                   ),
                 ),
                 const SizedBox(width: 16),
-
-                // Transaction details
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        transaction['title'],
+                        transaction.title,
                         style: const TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
@@ -430,7 +586,7 @@ class _StatementScreenState extends State<StatementScreen>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        transaction['category'],
+                        transaction.category,
                         style: TextStyle(
                           fontSize: 13,
                           color: Colors.white.withOpacity(0.7),
@@ -439,24 +595,20 @@ class _StatementScreenState extends State<StatementScreen>
                     ],
                   ),
                 ),
-
-                // Amount and date
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      isIncome
-                          ? '+LKR ${transaction['amount'].toString()}'
-                          : '-LKR ${transaction['amount'].toString()}',
+                      transaction.formattedAmount,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: isIncome ? Colors.green : Colors.red,
+                        color: transaction.amountColor,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      formattedDate,
+                      formatter.format(transaction.date),
                       style: TextStyle(
                         fontSize: 12,
                         color: Colors.white.withOpacity(0.6),
@@ -472,7 +624,25 @@ class _StatementScreenState extends State<StatementScreen>
     );
   }
 
-  Widget _buildEmptyState() {
+  void _showTransactionDetails(
+      BuildContext context, TransactionData transaction) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF0F0027),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => _TransactionDetailsModal(transaction: transaction),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState();
+
+  @override
+  Widget build(BuildContext context) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -503,165 +673,115 @@ class _StatementScreenState extends State<StatementScreen>
       ),
     );
   }
+}
 
-  void _showSearchDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF0F0027),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Search Transactions',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF00FFEB),
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: 'Search by description or amount',
-                  hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
-                  prefixIcon:
-                      const Icon(Icons.search, color: Color(0xFF00FFEB)),
-                  filled: true,
-                  fillColor:
-                      const Color.fromARGB(255, 84, 88, 119).withOpacity(0.3),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(color: Colors.white70),
-                    ),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00FFEB),
-                      foregroundColor: const Color(0xFF0F0027),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text('Search'),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
+class _FilterSheet extends StatefulWidget {
+  const _FilterSheet({
+    required this.selectedFilter,
+    required this.selectedSort,
+    required this.onFiltersChanged,
+  });
+
+  final String selectedFilter;
+  final String selectedSort;
+  final Function(String filter, String sort) onFiltersChanged;
+
+  @override
+  State<_FilterSheet> createState() => _FilterSheetState();
+}
+
+class _FilterSheetState extends State<_FilterSheet> {
+  late String _currentFilter;
+  late String _currentSort;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentFilter = widget.selectedFilter;
+    _currentSort = widget.selectedSort;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildHeader(),
+          const SizedBox(height: 20),
+          _buildFilterSection(),
+          const SizedBox(height: 20),
+          _buildSortSection(),
+          const SizedBox(height: 30),
+          _buildApplyButton(),
+        ],
       ),
     );
   }
 
-  void _showFilterSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF0F0027),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Filter & Sort',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF00FFEB),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close, color: Colors.white70),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              const Text(
-                'Transaction Type',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _buildFilterChips(setState),
-              const SizedBox(height: 20),
-              const Text(
-                'Sort By',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 10),
-              _buildSortChips(setState),
-              const SizedBox(height: 30),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      this.setState(() {});
-                    });
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FFEB),
-                    foregroundColor: const Color(0xFF0F0027),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Apply Filters',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              ),
-            ],
+  Widget _buildHeader() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        const Text(
+          'Filter & Sort',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF00FFEB),
           ),
         ),
-      ),
+        IconButton(
+          icon: const Icon(Icons.close, color: Colors.white70),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ],
     );
   }
 
-  Widget _buildFilterChips(StateSetter setState) {
+  Widget _buildFilterSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Transaction Type',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildFilterChips(),
+      ],
+    );
+  }
+
+  Widget _buildSortSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Sort By',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(height: 10),
+        _buildSortChips(),
+      ],
+    );
+  }
+
+  Widget _buildFilterChips() {
     return Wrap(
       spacing: 10,
-      children: _filters.map((filter) {
-        final isSelected = _selectedFilter == filter;
+      children: ['All', 'Income', 'Expense'].map((filter) {
+        final isSelected = _currentFilter == filter;
         return ChoiceChip(
           label: Text(filter),
           selected: isSelected,
@@ -673,22 +793,18 @@ class _StatementScreenState extends State<StatementScreen>
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
           onSelected: (selected) {
-            if (selected) {
-              setState(() {
-                _selectedFilter = filter;
-              });
-            }
+            if (selected) setState(() => _currentFilter = filter);
           },
         );
       }).toList(),
     );
   }
 
-  Widget _buildSortChips(StateSetter setState) {
+  Widget _buildSortChips() {
     return Wrap(
       spacing: 10,
-      children: _sortOptions.map((option) {
-        final isSelected = _selectedSort == option;
+      children: ['Latest', 'Oldest', 'Highest', 'Lowest'].map((option) {
+        final isSelected = _currentSort == option;
         return ChoiceChip(
           label: Text(option),
           selected: isSelected,
@@ -700,88 +816,102 @@ class _StatementScreenState extends State<StatementScreen>
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
           onSelected: (selected) {
-            if (selected) {
-              setState(() {
-                _selectedSort = option;
-              });
-            }
+            if (selected) setState(() => _currentSort = option);
           },
         );
       }).toList(),
     );
   }
 
-  void _showExportOptionsDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        backgroundColor: const Color(0xFF0F0027),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+  Widget _buildApplyButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: () {
+          widget.onFiltersChanged(_currentFilter, _currentSort);
+          Navigator.pop(context);
+        },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF00FFEB),
+          foregroundColor: const Color(0xFF0F0027),
+          padding: const EdgeInsets.symmetric(vertical: 15),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                'Export Statement',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFF00FFEB),
-                ),
+        child: const Text(
+          'Apply Filters',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+}
+
+class _ExportDialog extends StatelessWidget {
+  const _ExportDialog({required this.onExportSuccess});
+
+  final Function(String format) onExportSuccess;
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: const Color(0xFF0F0027),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Export Statement',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF00FFEB),
               ),
-              const SizedBox(height: 20),
-              _buildExportOption(
-                icon: Icons.picture_as_pdf,
-                title: 'PDF Document',
-                subtitle: 'Detailed statement',
-                onTap: () {
-                  Navigator.pop(context);
-                  _showExportSuccess(context, 'PDF');
-                },
-              ),
-              const Divider(color: Colors.white24),
-              _buildExportOption(
-                icon: Icons.table_chart,
-                title: 'Excel Spreadsheet',
-                subtitle: 'Export as XLS ',
-                onTap: () {
-                  Navigator.pop(context);
-                  _showExportSuccess(context, 'Excel');
-                },
-              ),
-              const Divider(color: Colors.white24),
-              _buildExportOption(
-                icon: Icons.text_snippet,
-                title: 'CSV File',
-                subtitle: 'Compatible with most financial software',
-                onTap: () {
-                  Navigator.pop(context);
-                  _showExportSuccess(context, 'CSV');
-                },
-              ),
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text(
-                  'Cancel',
-                  style: TextStyle(color: Colors.white70),
-                ),
-              ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 20),
+            _buildExportOption(
+              context,
+              icon: Icons.picture_as_pdf,
+              title: 'PDF Document',
+              subtitle: 'Detailed statement',
+              format: 'PDF',
+            ),
+            const Divider(color: Colors.white24),
+            _buildExportOption(
+              context,
+              icon: Icons.table_chart,
+              title: 'Excel Spreadsheet',
+              subtitle: 'Export as XLS',
+              format: 'Excel',
+            ),
+            const Divider(color: Colors.white24),
+            _buildExportOption(
+              context,
+              icon: Icons.text_snippet,
+              title: 'CSV File',
+              subtitle: 'Compatible with most financial software',
+              format: 'CSV',
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child:
+                  const Text('Cancel', style: TextStyle(color: Colors.white70)),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _buildExportOption({
+  Widget _buildExportOption(
+    BuildContext context, {
     required IconData icon,
     required String title,
     required String subtitle,
-    required VoidCallback onTap,
+    required String format,
   }) {
     return ListTile(
       leading: Icon(icon, color: const Color(0xFF00FFEB)),
@@ -795,150 +925,170 @@ class _StatementScreenState extends State<StatementScreen>
         style: TextStyle(color: Colors.white.withOpacity(0.6)),
       ),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      onTap: onTap,
+      onTap: () {
+        Navigator.pop(context);
+        onExportSuccess(format);
+      },
     );
   }
+}
 
-  void _showExportSuccess(BuildContext context, String format) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Statement exported as $format successfully!'),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        action: SnackBarAction(
-          label: 'VIEW',
-          textColor: Colors.white,
-          onPressed: () {},
-        ),
-      ),
-    );
-  }
+class _TransactionDetailsModal extends StatelessWidget {
+  const _TransactionDetailsModal({required this.transaction});
 
-  void _showTransactionDetails(
-      BuildContext context, Map<String, dynamic> transaction) {
-    final isIncome = transaction['isIncome'];
+  final TransactionData transaction;
+
+  @override
+  Widget build(BuildContext context) {
     final formatter = DateFormat('MMMM dd, yyyy');
-    final formattedDate = formatter.format(transaction['date']);
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF0F0027),
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        height: MediaQuery.of(context).size.height * 0.7,
-        child: Column(
-          children: [
-            Container(
-              width: 50,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.white24,
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            const SizedBox(height: 24),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: isIncome
-                    ? Colors.green.withOpacity(0.2)
-                    : Colors.red.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Icon(
-                transaction['icon'],
-                color: isIncome ? Colors.green : Colors.red,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              transaction['title'],
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              isIncome
-                  ? '+LKR ${transaction['amount'].toString()}'
-                  : '-LKR ${transaction['amount'].toString()}',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: isIncome ? Colors.green : Colors.red,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              formattedDate,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.white.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 32),
-            _buildTransactionDetailItem(
-              title: 'Category',
-              value: transaction['category'],
-              icon: Icons.category,
-            ),
-            _buildTransactionDetailItem(
-              title: 'Transaction ID',
-              value: 'TRX${transaction['id'].toString().padLeft(6, '0')}',
-              icon: Icons.receipt,
-            ),
-            _buildTransactionDetailItem(
-              title: 'Status',
-              value: 'Completed',
-              icon: Icons.check_circle,
-              valueColor: Colors.green,
-            ),
-            _buildTransactionDetailItem(
-              title: 'Payment Method',
-              value: 'Savings Account',
-              icon: Icons.account_balance,
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                const SizedBox(width: 16),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.close, size: 18),
-                    label: const Text('Close'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00FFEB),
-                      foregroundColor: const Color(0xFF0F0027),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
+    return Container(
+      padding: const EdgeInsets.all(24),
+      height: MediaQuery.of(context).size.height * 0.7,
+      child: Column(
+        children: [
+          _buildHandle(),
+          const SizedBox(height: 24),
+          _buildTransactionIcon(),
+          const SizedBox(height: 16),
+          _buildTransactionTitle(),
+          const SizedBox(height: 8),
+          _buildTransactionAmount(),
+          const SizedBox(height: 4),
+          _buildTransactionDate(formatter),
+          const SizedBox(height: 32),
+          _buildTransactionDetails(),
+          const Spacer(),
+          _buildCloseButton(context),
+        ],
       ),
     );
   }
 
-  Widget _buildTransactionDetailItem({
-    required String title,
-    required String value,
-    required IconData icon,
-    Color? valueColor,
-  }) {
+  Widget _buildHandle() {
+    return Container(
+      width: 50,
+      height: 5,
+      decoration: BoxDecoration(
+        color: Colors.white24,
+        borderRadius: BorderRadius.circular(10),
+      ),
+    );
+  }
+
+  Widget _buildTransactionIcon() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: transaction.amountColor.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Icon(
+        transaction.icon,
+        color: transaction.amountColor,
+        size: 32,
+      ),
+    );
+  }
+
+  Widget _buildTransactionTitle() {
+    return Text(
+      transaction.title,
+      style: const TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+        color: Colors.white,
+      ),
+    );
+  }
+
+  Widget _buildTransactionAmount() {
+    return Text(
+      transaction.formattedAmount,
+      style: TextStyle(
+        fontSize: 28,
+        fontWeight: FontWeight.bold,
+        color: transaction.amountColor,
+      ),
+    );
+  }
+
+  Widget _buildTransactionDate(DateFormat formatter) {
+    return Text(
+      formatter.format(transaction.date),
+      style: TextStyle(
+        fontSize: 14,
+        color: Colors.white.withOpacity(0.7),
+      ),
+    );
+  }
+
+  Widget _buildTransactionDetails() {
+    return Column(
+      children: [
+        _TransactionDetailItem(
+          title: 'Category',
+          value: transaction.category,
+          icon: Icons.category,
+        ),
+        _TransactionDetailItem(
+          title: 'Transaction ID',
+          value: 'TRX${transaction.id.toString().padLeft(6, '0')}',
+          icon: Icons.receipt,
+        ),
+        _TransactionDetailItem(
+          title: 'Status',
+          value: 'Completed',
+          icon: Icons.check_circle,
+          valueColor: Colors.green,
+        ),
+        _TransactionDetailItem(
+          title: 'Payment Method',
+          value: 'Savings Account',
+          icon: Icons.account_balance,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCloseButton(BuildContext context) {
+    return Row(
+      children: [
+        const SizedBox(width: 16),
+        Expanded(
+          child: ElevatedButton.icon(
+            onPressed: () => Navigator.pop(context),
+            icon: const Icon(Icons.close, size: 18),
+            label: const Text('Close'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00FFEB),
+              foregroundColor: const Color(0xFF0F0027),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TransactionDetailItem extends StatelessWidget {
+  const _TransactionDetailItem({
+    required this.title,
+    required this.value,
+    required this.icon,
+    this.valueColor,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
@@ -964,27 +1114,5 @@ class _StatementScreenState extends State<StatementScreen>
         ],
       ),
     );
-  }
-
-  List<Map<String, dynamic>> _generateTransactions(int days) {
-    final now = DateTime.now();
-    final random = Random();
-    final List<Map<String, dynamic>> transactions = [];
-
-    for (int i = 0; i < 20; i++) {
-      final date = now.subtract(Duration(days: random.nextInt(days)));
-      final isIncome = random.nextBool();
-      transactions.add({
-        'id': i + 1,
-        'title': isIncome ? 'Salary' : 'Groceries',
-        'category': isIncome ? 'Income' : 'Expense',
-        'amount': random.nextInt(5000) + 1000,
-        'date': date,
-        'isIncome': isIncome,
-        'icon': isIncome ? Icons.attach_money : Icons.shopping_cart,
-      });
-    }
-
-    return transactions;
   }
 }

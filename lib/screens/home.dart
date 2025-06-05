@@ -5,7 +5,6 @@ import 'cards.dart';
 import 'facilities.dart';
 import 'profile.dart';
 import 'statement.dart';
-import 'dart:ui';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -15,28 +14,44 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
+  late final TabController _tabController;
   int _selectedIndex = 0;
-  late TabController _tabController;
 
-  final List<Widget> _pages = [
-    const HomeContent(),
-    const AccountsScreen(),
-    const CardsScreen(),
-    const FacilitiesScreen(),
-    const ProfileScreen(),
+  // Theme constants
+  static const Color _primaryColor = Color(0xFF00FFEB);
+  static const Color _backgroundColor = Color(0xFF0F0027);
+
+  static const List<Widget> _pages = [
+    HomeContent(),
+    AccountsScreen(),
+    CardsScreen(),
+    FacilitiesScreen(),
+    ProfileScreen(),
+  ];
+
+  static const List<TabData> _tabsData = [
+    TabData(Icons.home_rounded, 'Home'),
+    TabData(Icons.account_balance_rounded, 'Accounts'),
+    TabData(Icons.credit_card_rounded, 'Cards'),
+    TabData(Icons.business_rounded, 'Facilities'),
+    TabData(Icons.person_rounded, 'Profile'),
   ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) {
-        setState(() {
-          _selectedIndex = _tabController.index;
-        });
-      }
-    });
+    _setupTabController();
+  }
+
+  void _setupTabController() {
+    _tabController = TabController(length: _pages.length, vsync: this);
+    _tabController.addListener(_onTabChanged);
+  }
+
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging && mounted) {
+      setState(() => _selectedIndex = _tabController.index);
+    }
   }
 
   @override
@@ -45,73 +60,57 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-      _tabController.animateTo(index);
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle.light,
       child: Scaffold(
-        backgroundColor: const Color(0xFF0F0027),
+        backgroundColor: _backgroundColor,
         extendBody: true,
         body: TabBarView(
           controller: _tabController,
           physics: const NeverScrollableScrollPhysics(),
           children: _pages,
         ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF0F0027),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.3),
-                blurRadius: 15,
-                offset: const Offset(0, -3),
-              ),
-            ],
+        bottomNavigationBar: _buildBottomNavigation(),
+      ),
+    );
+  }
+
+  Widget _buildBottomNavigation() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _backgroundColor,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 15,
+            offset: const Offset(0, -3),
           ),
-          child: SafeArea(
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: const Color(0xFF00FFEB),
-              indicatorWeight: 3,
-              labelPadding: const EdgeInsets.symmetric(vertical: 8),
-              indicatorSize: TabBarIndicatorSize.label,
-              labelColor: const Color(0xFF00FFEB),
-              unselectedLabelColor: Colors.grey,
-              tabs: [
-                Tab(
-                  icon: Icon(Icons.home_rounded),
-                  text: 'Home',
-                ),
-                Tab(
-                  icon: Icon(Icons.account_balance_rounded),
-                  text: 'Accounts',
-                ),
-                Tab(
-                  icon: Icon(Icons.credit_card_rounded),
-                  text: 'Cards',
-                ),
-                Tab(
-                  icon: Icon(Icons.business_rounded),
-                  text: 'Facilities',
-                ),
-                Tab(
-                  icon: Icon(Icons.person_rounded),
-                  text: 'Profile',
-                ),
-              ],
-            ),
-          ),
+        ],
+      ),
+      child: SafeArea(
+        child: TabBar(
+          controller: _tabController,
+          indicatorColor: _primaryColor,
+          indicatorWeight: 3,
+          labelPadding: const EdgeInsets.symmetric(vertical: 8),
+          indicatorSize: TabBarIndicatorSize.label,
+          labelColor: _primaryColor,
+          unselectedLabelColor: Colors.grey,
+          tabs: _tabsData
+              .map((tab) => Tab(icon: Icon(tab.icon), text: tab.label))
+              .toList(),
         ),
       ),
     );
   }
+}
+
+class TabData {
+  const TabData(this.icon, this.label);
+  final IconData icon;
+  final String label;
 }
 
 class HomeContent extends StatefulWidget {
@@ -123,18 +122,20 @@ class HomeContent extends StatefulWidget {
 
 class _HomeContentState extends State<HomeContent>
     with SingleTickerProviderStateMixin {
-  late AnimationController _animationController;
-  late Animation<double> _fadeInAnimation;
+  late final AnimationController _animationController;
+  late final Animation<double> _fadeInAnimation;
+  late final PageController _cardPageController;
 
-  // Define _currentCardIndex to track the current card index
   int _currentCardIndex = 0;
 
-  // Initialize the PageController directly to avoid late initialization errors
-  final PageController _cardPageController =
-      PageController(viewportFraction: 0.98);
+  // Theme constants
+  static const Color _primaryColor = Color(0xFF00FFEB);
+  static const Color _backgroundColor = Color(0xFF0F0027);
+  static const Color _containerColor = Color(0xFF545877);
+  static const Duration _animationDuration = Duration(milliseconds: 800);
 
-  // Add this list to store card data
-  final List<Map<String, dynamic>> _cardsList = [
+  // Card data as Maps to maintain compatibility with CardsScreen
+  static const List<Map<String, dynamic>> _cardsList = [
     {
       'cardNumber': '**** **** **** 2345',
       'cardHolder': 'F. S. Ismail',
@@ -149,30 +150,56 @@ class _HomeContentState extends State<HomeContent>
     },
   ];
 
+  // Transaction data
+  static const List<TransactionData> _transactions = [
+    TransactionData(
+      name: 'Salary Payment',
+      date: 'March 5, 2025',
+      amount: '+7,000',
+      isIncome: true,
+      reference: 'SAL25032025',
+      category: 'Salary',
+      description: 'Monthly Salary',
+    ),
+    TransactionData(
+      name: 'Shopping Purchase',
+      date: 'March 3, 2025',
+      amount: '-3,000',
+      isIncome: false,
+      reference: 'PUR03032025',
+      category: 'Shopping',
+      description: 'Shopping at Mall',
+    ),
+  ];
+
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
+    _setupAnimations();
+    _setupPageController();
+  }
+
+  void _setupAnimations() {
+    _animationController =
+        AnimationController(vsync: this, duration: _animationDuration);
     _fadeInAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeOut,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
     );
     _animationController.forward();
+  }
 
-    // Add the listener to the already initialized controller
-    _cardPageController.addListener(() {
-      if (_cardPageController.page != null &&
-          _cardPageController.page!.round() != _currentCardIndex) {
-        setState(() {
-          _currentCardIndex = _cardPageController.page!.round();
-        });
+  void _setupPageController() {
+    _cardPageController = PageController(viewportFraction: 0.98);
+    _cardPageController.addListener(_onPageChanged);
+  }
+
+  void _onPageChanged() {
+    if (_cardPageController.page != null && mounted) {
+      final newIndex = _cardPageController.page!.round();
+      if (newIndex != _currentCardIndex) {
+        setState(() => _currentCardIndex = newIndex);
       }
-    });
+    }
   }
 
   @override
@@ -189,266 +216,116 @@ class _HomeContentState extends State<HomeContent>
       child: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          SliverAppBar(
-            backgroundColor: const Color(0xFF0F0027),
-            expandedHeight: 120,
-            floating: false,
-            pinned: true,
-            elevation: 0,
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      const Color(0xFF545877),
-                      const Color(0xFF2C2E40),
-                    ],
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          'Good Morning',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFF00FFEB),
-                          ),
-                        ),
-                        Text(
-                          'Hi, Fathima Shazna',
-                          style: TextStyle(
-                            fontSize: 16,
-                            color: Colors.grey[300],
-                          ),
-                        ),
-                      ],
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          PageRouteBuilder(
-                            pageBuilder:
-                                (context, animation, secondaryAnimation) =>
-                                    ProfileScreen(),
-                            transitionsBuilder: (context, animation,
-                                secondaryAnimation, child) {
-                              var begin = const Offset(1.0, 0.0);
-                              var end = Offset.zero;
-                              var curve = Curves.easeInOut;
-                              var tween = Tween(begin: begin, end: end)
-                                  .chain(CurveTween(curve: curve));
-                              return SlideTransition(
-                                position: animation.drive(tween),
-                                child: child,
-                              );
-                            },
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                              color: const Color(0xFF00FFEB), width: 2),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF00FFEB).withOpacity(0.3),
-                              blurRadius: 8,
-                              spreadRadius: 1,
-                            ),
-                          ],
-                        ),
-                        child: CircleAvatar(
-                          backgroundColor: Colors.grey[800],
-                          radius: 22,
-                          child: const Icon(Icons.person, color: Colors.white),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
+          _buildAppBar(),
           SliverPadding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             sliver: SliverList(
               delegate: SliverChildListDelegate([
                 const SizedBox(height: 16),
-                // Summary Cards
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF545877).withOpacity(0.8),
-                        const Color(0xFF545877).withOpacity(0.4),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.05),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildSummaryItem(
-                          'Income last week',
-                          '+23,400',
-                          Icons.arrow_upward,
-                          Colors.green,
-                        ),
-                      ),
-                      Container(
-                        width: 1,
-                        height: 40,
-                        color: Colors.white.withOpacity(0.1),
-                      ),
-                      Expanded(
-                        child: _buildSummaryItem(
-                          'Expense last week',
-                          '-3,000',
-                          Icons.arrow_downward,
-                          Colors.red,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
+                _buildSummaryCards(),
                 const SizedBox(height: 16),
-                // Card Carousel
                 _buildCardsCarousel(),
-                // Card Indicators
                 _buildCardIndicators(),
                 const SizedBox(height: 24),
-                // Recent Transactions Header
                 _buildSectionHeader('Recent Transactions'),
                 const SizedBox(height: 16),
-                // Transactions List Container
-                Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        const Color(0xFF545877).withOpacity(0.8),
-                        const Color(0xFF545877).withOpacity(0.4),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.05),
-                      width: 1,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      ...List.generate(
-                        4,
-                        (index) => Column(
-                          children: [
-                            _buildTransactionTile(index % 2 == 0),
-                            if (index < 3)
-                              Divider(
-                                color: Colors.white.withOpacity(0.1),
-                                height: 1,
-                                indent: 72,
-                                endIndent: 16,
-                              ),
-                          ],
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              PageRouteBuilder(
-                                pageBuilder:
-                                    (context, animation, secondaryAnimation) =>
-                                        const StatementScreen(),
-                                transitionsBuilder: (context, animation,
-                                    secondaryAnimation, child) {
-                                  var begin = const Offset(1.0, 0.0);
-                                  var end = Offset.zero;
-                                  var curve = Curves.easeInOut;
-                                  var tween = Tween(begin: begin, end: end)
-                                      .chain(CurveTween(curve: curve));
-                                  return SlideTransition(
-                                    position: animation.drive(tween),
-                                    child: child,
-                                  );
-                                },
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Text(
-                                  'View All Transactions',
-                                  style: TextStyle(
-                                    color: const Color(0xFF00FFEB),
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(width: 4),
-                                Icon(
-                                  Icons.arrow_forward,
-                                  color: const Color(0xFF00FFEB),
-                                  size: 16,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 100), // Bottom padding
+                _buildTransactionsList(),
+                const SizedBox(height: 100),
               ]),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppBar() {
+    return SliverAppBar(
+      backgroundColor: _backgroundColor,
+      expandedHeight: 120,
+      floating: false,
+      pinned: true,
+      elevation: 0,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Container(
+          padding: const EdgeInsets.fromLTRB(16, 60, 16, 0),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF545877), Color(0xFF2C2E40)],
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              _buildGreetingSection(),
+              _buildProfileButton(),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGreetingSection() {
+    return const Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Text(
+          'Good Morning',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: _primaryColor,
+          ),
+        ),
+        Text(
+          'Hi, Fathima Shazna',
+          style: TextStyle(fontSize: 16, color: Colors.white70),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileButton() {
+    return GestureDetector(
+      onTap: () => _navigateToProfile(),
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: _primaryColor, width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: _primaryColor.withOpacity(0.3),
+              blurRadius: 8,
+              spreadRadius: 1,
+            ),
+          ],
+        ),
+        child: CircleAvatar(
+          backgroundColor: Colors.grey[800],
+          radius: 22,
+          child: const Icon(Icons.person, color: Colors.white),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryCards() {
+    return _GlassContainer(
+      child: Row(
+        children: [
+          Expanded(
+              child: _buildSummaryItem('Income last week', '+23,400',
+                  Icons.arrow_upward, Colors.green)),
+          Container(width: 1, height: 40, color: Colors.white.withOpacity(0.1)),
+          Expanded(
+              child: _buildSummaryItem('Expense last week', '-3,000',
+                  Icons.arrow_downward, Colors.red)),
         ],
       ),
     );
@@ -467,32 +344,21 @@ class _HomeContentState extends State<HomeContent>
               color: color.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              icon,
-              color: color,
-              size: 20,
-            ),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                ),
+                Text(title,
+                    style:
+                        const TextStyle(color: Colors.white70, fontSize: 12)),
                 const SizedBox(height: 4),
                 Text(
                   amount,
                   style: TextStyle(
-                    color: color,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                      color: color, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -502,24 +368,21 @@ class _HomeContentState extends State<HomeContent>
     );
   }
 
-  // New method for building the cards carousel
   Widget _buildCardsCarousel() {
     return SizedBox(
-      height: 225, // Fixed height for all cards
-      width: double.infinity,
+      height: 225,
       child: PageView.builder(
         controller: _cardPageController,
         itemCount: _cardsList.length,
         physics: const BouncingScrollPhysics(),
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: SizedBox(
-              width: double.infinity, // Ensures full width within the padding
-              child: _buildCreditCard(_cardsList[index], index),
-            ),
-          );
-        },
+        itemBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: _CreditCard(
+            cardData: _cardsList[index],
+            index: index,
+            onTap: () => _navigateToCards(index),
+          ),
+        ),
       ),
     );
   }
@@ -531,153 +394,16 @@ class _HomeContentState extends State<HomeContent>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(_cardsList.length, (index) {
+          final isActive = _currentCardIndex == index;
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 4),
-            width: _currentCardIndex == index ? 20 : 8,
+            width: isActive ? 20 : 8,
             decoration: BoxDecoration(
-              color: _currentCardIndex == index
-                  ? const Color(0xFF00FFEB)
-                  : Colors.grey.withOpacity(0.5),
+              color: isActive ? _primaryColor : Colors.grey.withOpacity(0.5),
               borderRadius: BorderRadius.circular(5),
             ),
           );
         }),
-      ),
-    );
-  }
-
-  Widget _buildCreditCard(Map<String, dynamic> cardData, int index) {
-    return Hero(
-      tag: 'creditCard$index',
-      child: Card(
-        margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        elevation: 15,
-        shadowColor: Colors.black.withOpacity(0.5),
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                PageRouteBuilder(
-                  pageBuilder: (context, animation, secondaryAnimation) =>
-                      CardsScreen(
-                    initialCardIndex: index,
-                    cardsList: _cardsList,
-                  ),
-                  transitionsBuilder:
-                      (context, animation, secondaryAnimation, child) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    );
-                  },
-                ),
-              );
-            },
-            child: Container(
-              height: 225,
-              width: double.infinity,
-              color: Colors.black,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  // Background image taking full size of the card with some scale
-                  Transform.scale(
-                    scale: 1.2,
-                    child: Image.asset(
-                      cardData['background'],
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                    ),
-                  ),
-                  // Card content
-                  Padding(
-                    padding: const EdgeInsets.all(20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const SizedBox(height: 93),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              cardData['cardNumber'],
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 24,
-                                letterSpacing: 2,
-                                fontFamily: 'Courier Prime',
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.start,
-                          children: [
-                            const SizedBox(width: 20),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'CARD HOLDER',
-                                  style: TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 10,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  cardData['cardHolder'],
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 40),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'EXPIRES',
-                                  style: TextStyle(
-                                    color: Colors.white60,
-                                    fontSize: 10,
-                                    letterSpacing: 1,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  cardData['expiryDate'],
-                                  style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
@@ -689,7 +415,7 @@ class _HomeContentState extends State<HomeContent>
           height: 18,
           width: 3,
           decoration: BoxDecoration(
-            color: const Color(0xFF00FFEB),
+            color: _primaryColor,
             borderRadius: BorderRadius.circular(3),
           ),
         ),
@@ -699,149 +425,63 @@ class _HomeContentState extends State<HomeContent>
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Color(0xFF00FFEB),
+            color: _primaryColor,
           ),
         ),
       ],
     );
   }
 
-  void _showTransactionDetailsSheet(bool isIncome) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => DraggableScrollableSheet(
-        initialChildSize: 0.5,
-        maxChildSize: 0.9,
-        minChildSize: 0.5,
-        builder: (_, controller) => Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF0F0027),
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      const Color(0xFF545877),
-                      const Color(0xFF2C2E40),
-                    ],
+  Widget _buildTransactionsList() {
+    return _GlassContainer(
+      child: Column(
+        children: [
+          ...List.generate(4, (index) {
+            final transaction = _transactions[index % _transactions.length];
+            return Column(
+              children: [
+                _TransactionTile(
+                  transaction: transaction,
+                  onTap: () => _showTransactionDetails(transaction),
+                ),
+                if (index < 3)
+                  Divider(
+                    color: Colors.white.withOpacity(0.1),
+                    height: 1,
+                    indent: 72,
+                    endIndent: 16,
                   ),
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(20)),
-                ),
-                child: Column(
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 5,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.3),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    const Text(
-                      'Transaction Details',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: Color(0xFF00FFEB),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 60,
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: isIncome
-                                ? Colors.green.withOpacity(0.1)
-                                : Colors.red.withOpacity(0.1),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            isIncome
-                                ? Icons.arrow_upward
-                                : Icons.arrow_downward,
-                            color: isIncome ? Colors.green : Colors.red,
-                            size: 30,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              isIncome ? '+7,000' : '-3,000',
-                              style: TextStyle(
-                                fontSize: 24,
-                                fontWeight: FontWeight.bold,
-                                color: isIncome ? Colors.green : Colors.red,
-                              ),
-                            ),
-                            Text(
-                              isIncome ? 'Income' : 'Expense',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.white70,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+              ],
+            );
+          }),
+          _buildViewAllButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildViewAllButton() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: InkWell(
+        onTap: () => _navigateToStatements(),
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: const Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                'View All Transactions',
+                style: TextStyle(
+                    color: _primaryColor, fontWeight: FontWeight.bold),
               ),
-              Expanded(
-                child: ListView(
-                  controller: controller,
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    _detailItem('Date', 'March 5, 2025'),
-                    _detailItem(
-                        'Transaction Type', isIncome ? 'Income' : 'Expense'),
-                    _detailItem('Category', isIncome ? 'Salary' : 'Shopping'),
-                    _detailItem('Description',
-                        isIncome ? 'Monthly Salary' : 'Shopping at Mall'),
-                    _detailItem('Status', 'Completed'),
-                    _detailItem(
-                        'Reference', isIncome ? 'SAL25032025' : 'PUR03032025'),
-                    const SizedBox(height: 30),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(context),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF00FFEB),
-                        foregroundColor: const Color(0xFF0F0027),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        elevation: 2,
-                      ),
-                      child: const Text(
-                        'Close',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              SizedBox(width: 4),
+              Icon(Icons.arrow_forward, color: _primaryColor, size: 16),
             ],
           ),
         ),
@@ -849,20 +489,231 @@ class _HomeContentState extends State<HomeContent>
     );
   }
 
-  Widget _buildTransactionTile(bool isIncome) {
-    final transactionName = isIncome ? 'Salary Payment' : 'Shopping Purchase';
-    final transactionDate = isIncome ? 'March 5, 2025' : 'March 3, 2025';
-    final amount = isIncome ? '+7,000' : '-3,000';
-    final iconData = isIncome ? Icons.arrow_upward : Icons.arrow_downward;
-    final iconColor = isIncome ? Colors.green : Colors.red;
+  // Navigation methods
+  void _navigateToProfile() {
+    Navigator.push(context, _createSlideTransition(const ProfileScreen()));
+  }
 
+  void _navigateToCards(int index) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => CardsScreen(
+          initialCardIndex: index,
+          cardsList: _cardsList, // Directly pass the Map list
+        ),
+        transitionsBuilder: (context, animation, _, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    );
+  }
+
+  void _navigateToStatements() {
+    Navigator.push(context, _createSlideTransition(const StatementScreen()));
+  }
+
+  PageRouteBuilder _createSlideTransition(Widget child) {
+    return PageRouteBuilder(
+      pageBuilder: (context, animation, _) => child,
+      transitionsBuilder: (context, animation, _, child) {
+        const begin = Offset(1.0, 0.0);
+        final tween = Tween(begin: begin, end: Offset.zero)
+            .chain(CurveTween(curve: Curves.easeInOut));
+        return SlideTransition(position: animation.drive(tween), child: child);
+      },
+    );
+  }
+
+  void _showTransactionDetails(TransactionData transaction) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _TransactionDetailsSheet(transaction: transaction),
+    );
+  }
+}
+
+// Data models
+class TransactionData {
+  const TransactionData({
+    required this.name,
+    required this.date,
+    required this.amount,
+    required this.isIncome,
+    required this.reference,
+    required this.category,
+    required this.description,
+  });
+
+  final String name;
+  final String date;
+  final String amount;
+  final bool isIncome;
+  final String reference;
+  final String category;
+  final String description;
+
+  Color get iconColor => isIncome ? Colors.green : Colors.red;
+  IconData get iconData => isIncome ? Icons.arrow_upward : Icons.arrow_downward;
+}
+
+// Reusable components
+class _GlassContainer extends StatelessWidget {
+  const _GlassContainer({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            const Color(0xFF545877).withOpacity(0.8),
+            const Color(0xFF545877).withOpacity(0.4),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withOpacity(0.05)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+}
+
+class _CreditCard extends StatelessWidget {
+  const _CreditCard({
+    required this.cardData,
+    required this.index,
+    required this.onTap,
+  });
+
+  final Map<String, dynamic> cardData;
+  final int index;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Hero(
+      tag: 'creditCard$index',
+      child: Card(
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        elevation: 15,
+        shadowColor: Colors.black.withOpacity(0.5),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: onTap,
+            child: Container(
+              height: 225,
+              color: Colors.black,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Transform.scale(
+                    scale: 1.2,
+                    child: Image.asset(
+                      cardData['background'],
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                    ),
+                  ),
+                  _buildCardContent(),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardContent() {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const SizedBox(height: 93),
+          Text(
+            cardData['cardNumber'],
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              letterSpacing: 2,
+              fontFamily: 'Courier Prime',
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              const SizedBox(width: 20),
+              _buildCardInfo('CARD HOLDER', cardData['cardHolder']),
+              const SizedBox(width: 40),
+              _buildCardInfo('EXPIRES', cardData['expiryDate']),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardInfo(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white60,
+            fontSize: 10,
+            letterSpacing: 1,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TransactionTile extends StatelessWidget {
+  const _TransactionTile({
+    required this.transaction,
+    required this.onTap,
+  });
+
+  final TransactionData transaction;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: () {
-          // Show transaction details
-          _showTransactionDetailsSheet(isIncome);
-        },
+        onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
@@ -871,14 +722,11 @@ class _HomeContentState extends State<HomeContent>
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.1),
+                  color: transaction.iconColor.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
-                  iconData,
-                  color: iconColor,
-                  size: 20,
-                ),
+                child: Icon(transaction.iconData,
+                    color: transaction.iconColor, size: 20),
               ),
               const SizedBox(width: 16),
               Expanded(
@@ -886,7 +734,7 @@ class _HomeContentState extends State<HomeContent>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      transactionName,
+                      transaction.name,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Colors.white,
@@ -895,11 +743,9 @@ class _HomeContentState extends State<HomeContent>
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      transactionDate,
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 12,
-                      ),
+                      transaction.date,
+                      style:
+                          const TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
                 ),
@@ -908,19 +754,17 @@ class _HomeContentState extends State<HomeContent>
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    amount,
+                    transaction.amount,
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: iconColor,
+                      color: transaction.iconColor,
                       fontSize: 16,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8),
@@ -941,8 +785,15 @@ class _HomeContentState extends State<HomeContent>
       ),
     );
   }
+}
 
-  Widget _buildTransactionDetailsSheet(bool isIncome) {
+class _TransactionDetailsSheet extends StatelessWidget {
+  const _TransactionDetailsSheet({required this.transaction});
+
+  final TransactionData transaction;
+
+  @override
+  Widget build(BuildContext context) {
     return DraggableScrollableSheet(
       initialChildSize: 0.5,
       maxChildSize: 0.9,
@@ -954,151 +805,129 @@ class _HomeContentState extends State<HomeContent>
         ),
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    const Color(0xFF545877),
-                    const Color(0xFF2C2E40),
-                  ],
-                ),
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Column(
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 5,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Transaction Details',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF00FFEB),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Container(
-                        width: 60,
-                        height: 60,
-                        decoration: BoxDecoration(
-                          color: isIncome
-                              ? Colors.green.withOpacity(0.1)
-                              : Colors.red.withOpacity(0.1),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(
-                          isIncome ? Icons.arrow_upward : Icons.arrow_downward,
-                          color: isIncome ? Colors.green : Colors.red,
-                          size: 30,
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isIncome ? '+7,000' : '-3,000',
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                              color: isIncome ? Colors.green : Colors.red,
-                            ),
-                          ),
-                          Text(
-                            isIncome ? 'Income' : 'Expense',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                controller: controller,
-                padding: const EdgeInsets.all(20),
-                children: [
-                  _detailItem('Date', 'March 5, 2025'),
-                  _detailItem(
-                      'Transaction Type', isIncome ? 'Income' : 'Expense'),
-                  _detailItem('Category', isIncome ? 'Salary' : 'Shopping'),
-                  _detailItem('Description',
-                      isIncome ? 'Monthly Salary' : 'Shopping at Mall'),
-                  _detailItem('Status', 'Completed'),
-                  _detailItem(
-                      'Reference', isIncome ? 'SAL25032025' : 'PUR03032025'),
-                  const SizedBox(height: 30),
-                  ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00FFEB),
-                      foregroundColor: const Color(0xFF0F0027),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      elevation: 2,
-                    ),
-                    child: const Text(
-                      'Close',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            _buildSheetHeader(),
+            Expanded(child: _buildSheetContent(controller, context)),
           ],
         ),
       ),
     );
   }
 
-  Widget _detailItem(String label, String value) {
+  Widget _buildSheetHeader() {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF545877), Color(0xFF2C2E40)],
+        ),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      child: Column(
+        children: [
+          Center(
+            child: Container(
+              width: 40,
+              height: 5,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          const Text(
+            'Transaction Details',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF00FFEB),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: transaction.iconColor.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(transaction.iconData,
+                    color: transaction.iconColor, size: 30),
+              ),
+              const SizedBox(width: 16),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    transaction.amount,
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: transaction.iconColor,
+                    ),
+                  ),
+                  Text(
+                    transaction.isIncome ? 'Income' : 'Expense',
+                    style: const TextStyle(fontSize: 14, color: Colors.white70),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSheetContent(ScrollController controller, BuildContext context) {
+    return ListView(
+      controller: controller,
+      padding: const EdgeInsets.all(20),
+      children: [
+        _buildDetailItem('Date', transaction.date),
+        _buildDetailItem(
+            'Transaction Type', transaction.isIncome ? 'Income' : 'Expense'),
+        _buildDetailItem('Category', transaction.category),
+        _buildDetailItem('Description', transaction.description),
+        _buildDetailItem('Status', 'Completed'),
+        _buildDetailItem('Reference', transaction.reference),
+        const SizedBox(height: 30),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF00FFEB),
+            foregroundColor: const Color(0xFF0F0027),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            elevation: 2,
+          ),
+          child: const Text(
+            'Close',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDetailItem(String label, String value) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         border: Border(
-          bottom: BorderSide(
-            color: Colors.white.withOpacity(0.1),
-            width: 1,
-          ),
+          bottom: BorderSide(color: Colors.white.withOpacity(0.1)),
         ),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.grey[400],
-              fontSize: 14,
-            ),
-          ),
+          Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 14)),
           Text(
             value,
             style: const TextStyle(

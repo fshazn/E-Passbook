@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:ui';
 
 class AddAccountsScreen extends StatefulWidget {
-  const AddAccountsScreen({Key? key}) : super(key: key);
+  const AddAccountsScreen({super.key});
 
   @override
   State<AddAccountsScreen> createState() => _AddAccountsScreenState();

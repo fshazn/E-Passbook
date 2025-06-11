@@ -1,16 +1,20 @@
-import 'package:e_pass_app/screens/login.dart';
+import 'package:e_pass_app/screens/login_banking.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui';
 
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+// Import your OTP verification screen to access the session management methods
+// import 'package:e_pass_app/screens/otp_verification.dart';
+
+class ProfileContent extends StatefulWidget {
+  const ProfileContent({super.key});
 
   @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
+  State<ProfileContent> createState() => _ProfileScreenState();
 }
 
-class _ProfileScreenState extends State<ProfileScreen>
+class _ProfileScreenState extends State<ProfileContent>
     with SingleTickerProviderStateMixin {
   late final AnimationController _animationController;
   late final Animation<double> _fadeInAnimation;
@@ -119,6 +123,79 @@ class _ProfileScreenState extends State<ProfileScreen>
   void dispose() {
     _animationController.dispose();
     super.dispose();
+  }
+
+  // Updated logout method with session management
+  Future<void> _performLogout() async {
+    try {
+      // Get stored session info to clear it
+      final prefs = await SharedPreferences.getInstance();
+      final lastMobile = prefs.getString('last_verified_mobile') ?? '';
+      final lastAccount = prefs.getString('last_verified_account') ?? '';
+
+      // Clear the verified session using the same logic from OTP verification
+      await _clearVerifiedSession(lastMobile, lastAccount);
+
+      // Navigate back to login screen
+      if (mounted) {
+        Navigator.pushAndRemoveUntil(
+          context,
+          PageRouteBuilder(
+            pageBuilder: (context, animation, _) => const LoginBankingScreen(),
+            transitionsBuilder: (context, animation, _, child) {
+              const begin = Offset(0.0, 1.0);
+              final tween = Tween(begin: begin, end: Offset.zero)
+                  .chain(CurveTween(curve: Curves.easeOut));
+              return SlideTransition(
+                  position: animation.drive(tween), child: child);
+            },
+            transitionDuration: const Duration(milliseconds: 500),
+          ),
+          (route) => false, // Remove all previous routes
+        );
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Logged out successfully'),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error during logout: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Error during logout. Please try again.'),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    }
+  }
+
+  // Clear verified session method (copied from OTP verification logic)
+  Future<void> _clearVerifiedSession(String mobileNumber,
+      [String? accountNumber]) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final mobile = mobileNumber.replaceAll(RegExp(r'[^0-9]'), '');
+      final account = accountNumber ?? '';
+      final sessionKey = '${mobile}_${account}_session'.toLowerCase();
+
+      await prefs.remove('verified_session_$sessionKey');
+      await prefs.remove('last_verified_mobile');
+      await prefs.remove('last_verified_account');
+    } catch (e) {
+      debugPrint('Error clearing verified session: $e');
+    }
   }
 
   @override
@@ -299,7 +376,7 @@ class _ProfileScreenState extends State<ProfileScreen>
       builder: (context) => _LogoutDialog(
         onConfirm: () {
           Navigator.pop(context);
-          _navigateToLogin();
+          _performLogout(); // Updated to use the new logout method
         },
       ),
     );
@@ -309,7 +386,7 @@ class _ProfileScreenState extends State<ProfileScreen>
     Navigator.pushReplacement(
       context,
       PageRouteBuilder(
-        pageBuilder: (context, animation, _) => const LoginScreen(),
+        pageBuilder: (context, animation, _) => const LoginBankingScreen(),
         transitionsBuilder: (context, animation, _, child) {
           const begin = Offset(0.0, 1.0);
           final tween = Tween(begin: begin, end: Offset.zero)
@@ -332,7 +409,107 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 }
 
-// Data models
+// Updated Logout Dialog with better messaging
+class _LogoutDialog extends StatelessWidget {
+  const _LogoutDialog({required this.onConfirm});
+
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    return BackdropFilter(
+      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+      child: Dialog(
+        backgroundColor: const Color(0xFF1A1F47),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildIcon(),
+              const SizedBox(height: 20),
+              _buildTitle(),
+              const SizedBox(height: 10),
+              _buildMessage(),
+              const SizedBox(height: 30),
+              _buildButtons(context),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIcon() {
+    return Container(
+      width: 60,
+      height: 60,
+      decoration: BoxDecoration(
+        color: const Color(0xFF00FFEB).withOpacity(0.1),
+        shape: BoxShape.circle,
+      ),
+      child: const Icon(Icons.logout, color: Color(0xFF00FFEB), size: 30),
+    );
+  }
+
+  Widget _buildTitle() {
+    return const Text(
+      'Logout',
+      style: TextStyle(
+        color: Colors.white,
+        fontSize: 24,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildMessage() {
+    return const Text(
+      'Are you sure you want to logout? You will need to verify OTP again on your next login.',
+      textAlign: TextAlign.center,
+      style: TextStyle(color: Colors.white70, fontSize: 16),
+    );
+  }
+
+  Widget _buildButtons(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.grey.withOpacity(0.2),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            child: const Text('Cancel',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: ElevatedButton(
+            onPressed: onConfirm,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF00FFEB),
+              foregroundColor: const Color(0xFF0F0027),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            child: const Text('Logout',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// Data models (unchanged)
 enum SettingType { navigation, toggle, selection }
 
 class UserProfile {
@@ -375,7 +552,7 @@ class SettingSection {
   final List<SettingItem> items;
 }
 
-// Reusable components
+// All other widget classes remain the same...
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({required this.profile});
 
@@ -652,105 +829,6 @@ class _SelectionTile extends StatelessWidget {
           style: const TextStyle(color: Colors.white, fontSize: 12),
         ),
       ),
-    );
-  }
-}
-
-class _LogoutDialog extends StatelessWidget {
-  const _LogoutDialog({required this.onConfirm});
-
-  final VoidCallback onConfirm;
-
-  @override
-  Widget build(BuildContext context) {
-    return BackdropFilter(
-      filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
-      child: Dialog(
-        backgroundColor: const Color(0xFF1A1F47),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildIcon(),
-              const SizedBox(height: 20),
-              _buildTitle(),
-              const SizedBox(height: 10),
-              _buildMessage(),
-              const SizedBox(height: 30),
-              _buildButtons(context),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIcon() {
-    return Container(
-      width: 60,
-      height: 60,
-      decoration: BoxDecoration(
-        color: const Color(0xFF00FFEB).withOpacity(0.1),
-        shape: BoxShape.circle,
-      ),
-      child: const Icon(Icons.logout, color: Color(0xFF00FFEB), size: 30),
-    );
-  }
-
-  Widget _buildTitle() {
-    return const Text(
-      'Logout',
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: 24,
-        fontWeight: FontWeight.bold,
-      ),
-    );
-  }
-
-  Widget _buildMessage() {
-    return const Text(
-      'Are you sure you want to logout from your account?',
-      textAlign: TextAlign.center,
-      style: TextStyle(color: Colors.white70, fontSize: 16),
-    );
-  }
-
-  Widget _buildButtons(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey.withOpacity(0.2),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            child: const Text('Cancel',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: onConfirm,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF00FFEB),
-              foregroundColor: const Color(0xFF0F0027),
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-            ),
-            child: const Text('Logout',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        ),
-      ],
     );
   }
 }

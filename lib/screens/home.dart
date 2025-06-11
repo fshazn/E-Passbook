@@ -23,10 +23,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   static const List<Widget> _pages = [
     HomeContent(),
-    AccountsScreen(),
-    CardsScreen(),
-    FacilitiesScreen(),
-    ProfileScreen(),
+    AccountsContent(),
+    CardsContent(),
+    FacilitiesContent(),
+    ProfileContent(),
   ];
 
   static const List<TabData> _tabsData = [
@@ -491,14 +491,14 @@ class _HomeContentState extends State<HomeContent>
 
   // Navigation methods
   void _navigateToProfile() {
-    Navigator.push(context, _createSlideTransition(const ProfileScreen()));
+    Navigator.push(context, _createSlideTransition(const ProfileContent()));
   }
 
   void _navigateToCards(int index) {
     Navigator.push(
       context,
       PageRouteBuilder(
-        pageBuilder: (context, animation, _) => CardsScreen(
+        pageBuilder: (context, animation, _) => CardsContent(
           initialCardIndex: index,
           cardsList: _cardsList, // Directly pass the Map list
         ),

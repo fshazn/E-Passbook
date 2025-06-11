@@ -18,18 +18,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
-/* 
-🎯 FOR TEAM DEMO:
-To switch between versions, only modify the splashScreen.dart file:
-
-In splashScreen.dart, find the _navigateToLogin() method and change:
-
-ORIGINAL VERSION:
-Navigator.pushReplacement(context, PageRouteBuilder(...LoginScreen()...));
-
-BANKING VERSION (for demo):
-Navigator.pushReplacement(context, PageRouteBuilder(...LoginBankingScreen()...));
-
-That's it! Your main.dart stays untouched.
-*/

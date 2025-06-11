@@ -1,9 +1,9 @@
-import 'package:e_pass_app/screens/home_banking.dart';
+import 'package:e_pass_app/screens/bottom_navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
-import 'home.dart';
+//import 'main_screen.dart'; // Import the main screen with bottom navigation
 
 class OTPVerificationScreen extends StatefulWidget {
   final String mobileNumber;
@@ -233,7 +233,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
         if (_currentOTP == '123456' || _currentOTP.length == 6) {
           // Save verified session before navigating
           await _saveVerifiedSession();
-          _navigateToHome();
+          _navigateToMainApp();
         } else {
           _showErrorAndShake('Invalid OTP. Please try again.');
           _clearOTP();
@@ -242,22 +242,58 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
     });
   }
 
-  void _navigateToHome() {
-    Navigator.pushReplacement(
+  void _navigateToMainApp() {
+    // Clear the entire navigation stack and navigate to main app
+    Navigator.pushAndRemoveUntil(
       context,
       PageRouteBuilder(
-        pageBuilder: (context, animation, _) => const HomeScreen2(),
-        //ImprovedHomeContent(),
+        pageBuilder: (context, animation, _) => const MainScreen(),
         transitionsBuilder: (context, animation, _, child) {
+          // Slide up animation
           const begin = Offset(0.0, 1.0);
-          final tween = Tween(begin: begin, end: Offset.zero)
+          const end = Offset.zero;
+          final tween = Tween(begin: begin, end: end)
               .chain(CurveTween(curve: Curves.easeOutCubic));
+
+          // Add fade effect for smoother transition
+          final fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeIn),
+          );
+
           return SlideTransition(
-              position: animation.drive(tween), child: child);
+            position: animation.drive(tween),
+            child: FadeTransition(
+              opacity: fadeAnimation,
+              child: child,
+            ),
+          );
         },
         transitionDuration: const Duration(milliseconds: 700),
       ),
+      (route) => false, // Remove all previous routes
     );
+
+    // Add success feedback
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Text('Welcome to E-Pass Banking!'),
+              ],
+            ),
+            backgroundColor: Colors.green.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    });
   }
 
   void _showErrorAndShake(String message) {
@@ -290,6 +326,9 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
   void _resendOTP() {
     if (!_canResend) return;
 
+    // Add haptic feedback
+    HapticFeedback.mediumImpact();
+
     // Simulate API call to resend OTP
     setState(() => _isLoading = true);
 
@@ -301,7 +340,15 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
 
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('OTP sent to ${widget.mobileNumber}'),
+            content: Row(
+              children: [
+                const Icon(Icons.sms, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('New OTP sent to ${widget.mobileNumber}'),
+                ),
+              ],
+            ),
             backgroundColor: Colors.green.shade700,
             behavior: SnackBarBehavior.floating,
             shape:
@@ -377,6 +424,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
           const SizedBox(width: 48), // Balance the back button
@@ -410,6 +458,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
             fontSize: 24,
             fontWeight: FontWeight.bold,
           ),
+          overflow: TextOverflow.ellipsis,
         ),
         const SizedBox(height: 12),
         RichText(
@@ -497,23 +546,48 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
     return Column(
       children: [
         if (!_canResend) ...[
-          Text(
-            'Resend code in ${_formatTime(_remainingTime)}',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.7),
-              fontSize: 16,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.timer_outlined,
+                color: Colors.white.withOpacity(0.7),
+                size: 16,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Resend code in ${_formatTime(_remainingTime)}',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 16,
+                ),
+              ),
+            ],
           ),
         ] else ...[
           GestureDetector(
             onTap: _resendOTP,
-            child: Text(
-              'Resend OTP',
-              style: TextStyle(
-                color: _primaryColor,
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                decoration: TextDecoration.underline,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: _primaryColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _primaryColor.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.refresh, color: _primaryColor, size: 16),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Resend OTP',
+                    style: TextStyle(
+                      color: _primaryColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -533,6 +607,7 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
           elevation: 0,
           shape:
               RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          disabledBackgroundColor: _primaryColor.withOpacity(0.3),
         ),
         onPressed: (_isLoading || _currentOTP.length != 6) ? null : _verifyOTP,
         child: _isLoading
@@ -544,13 +619,20 @@ class _OTPVerificationScreenState extends State<OTPVerificationScreen>
                   valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
                 ),
               )
-            : const Text(
-                'Verify & Continue',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w500,
-                  letterSpacing: 0.5,
-                ),
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.verified_user, size: 20),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Verify & Continue',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
               ),
       ),
     );
@@ -649,6 +731,15 @@ class _OTPDigitField extends StatelessWidget {
                   : Colors.grey.withOpacity(0.3),
           width: isActive ? 2 : 1,
         ),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: const Color(0xFF00FFEB).withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
       child: TextField(
         controller: controller,

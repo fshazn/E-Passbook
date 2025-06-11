@@ -24,10 +24,10 @@ class _HomeScreenState extends State<HomeScreen2>
 
   static const List<Widget> _pages = [
     HomeContent(),
-    AccountsScreen(),
-    CardsScreen(),
-    FacilitiesScreen(),
-    ProfileScreen(),
+    AccountsContent(),
+    CardsContent(),
+    FacilitiesContent(),
+    ProfileContent(),
   ];
 
   static const List<TabData> _tabsData = [
@@ -750,19 +750,19 @@ class _HomeContentState extends State<HomeContent>
 
   // Navigation methods
   void _navigateToProfile() {
-    Navigator.push(context, _createSlideTransition(const ProfileScreen()));
+    Navigator.push(context, _createSlideTransition(const ProfileContent()));
   }
 
   void _navigateToAccounts() {
-    Navigator.push(context, _createSlideTransition(const AccountsScreen()));
+    Navigator.push(context, _createSlideTransition(const AccountsContent()));
   }
 
   void _navigateToCards() {
-    Navigator.push(context, _createSlideTransition(const CardsScreen()));
+    Navigator.push(context, _createSlideTransition(const CardsContent()));
   }
 
   void _navigateToFacilities() {
-    Navigator.push(context, _createSlideTransition(const FacilitiesScreen()));
+    Navigator.push(context, _createSlideTransition(const FacilitiesContent()));
   }
 
   void _navigateToStatements() {

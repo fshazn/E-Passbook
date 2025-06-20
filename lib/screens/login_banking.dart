@@ -1,48 +1,61 @@
+// login_page.dart - COMPLETE UPDATED FILE WITH SECURITY FIX
+import 'dart:async';
+
+import 'package:e_pass_app/screens/bottom_navbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'registration.dart';
-import 'otp_verification.dart';
-import 'home_banking.dart';
+import 'package:local_auth/local_auth.dart';
+import 'registration_screen.dart';
+import 'forgot_code_screen.dart';
+import 'accounts.dart';
+import 'biometrics_setup.dart';
 
 class LoginBankingScreen extends StatefulWidget {
   const LoginBankingScreen({super.key});
 
   @override
-  State<LoginBankingScreen> createState() => _LoginBankingScreenState();
+  State<LoginBankingScreen> createState() => _LoginPageState();
 }
 
-class _LoginBankingScreenState extends State<LoginBankingScreen>
+class _LoginPageState extends State<LoginBankingScreen>
     with SingleTickerProviderStateMixin {
   late final TextEditingController _accountController;
-  late final TextEditingController _mobileController;
+  late final TextEditingController _accessCodeController;
   late final AnimationController _animationController;
   late final Animation<double> _fadeInAnimation;
+  late final LocalAuthentication _localAuth;
 
   bool _isLoading = false;
+  bool _showBiometricOption = false;
+  bool _isBiometricAvailable = false;
+  List<BiometricType> _availableBiometrics = [];
+  String? _actualAccountNumber; // NEW: Store actual account number for security
 
   // Theme constants
   static const Color _primaryColor = Color(0xFF00FFEB);
   static const Color _backgroundColor = Color(0xFF0F0027);
   static const Color _containerColor = Color.fromARGB(255, 84, 88, 119);
-  static const Duration _animationDuration = Duration(milliseconds: 1200);
 
   @override
   void initState() {
     super.initState();
     _initializeControllers();
     _setupAnimations();
+    _initializeBiometrics();
+    _checkSavedCredentials();
   }
 
   void _initializeControllers() {
     _accountController = TextEditingController();
-    _mobileController = TextEditingController();
+    _accessCodeController = TextEditingController();
+    _localAuth = LocalAuthentication();
   }
 
   void _setupAnimations() {
     _animationController = AnimationController(
       vsync: this,
-      duration: _animationDuration,
+      duration: const Duration(milliseconds: 1200),
     );
     _fadeInAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _animationController, curve: Curves.easeOut),
@@ -50,12 +63,284 @@ class _LoginBankingScreenState extends State<LoginBankingScreen>
     _animationController.forward();
   }
 
+  Future<void> _initializeBiometrics() async {
+    try {
+      _isBiometricAvailable = await _localAuth.canCheckBiometrics;
+      if (_isBiometricAvailable) {
+        _availableBiometrics = await _localAuth.getAvailableBiometrics();
+      }
+    } catch (e) {
+      debugPrint('Error initializing biometrics: $e');
+    }
+  }
+
+  // NEW: Method to mask account number for display
+  String _maskAccountNumber(String accountNumber) {
+    if (accountNumber.length <= 4) {
+      return accountNumber; // Don't mask if too short
+    }
+
+    // Show first 2 and last 4 digits, mask the rest
+    final firstPart = accountNumber.substring(0, 2);
+    final lastPart = accountNumber.substring(accountNumber.length - 4);
+    final maskedLength = accountNumber.length - 6;
+    final masked = '*' * maskedLength;
+
+    return '$firstPart$masked$lastPart';
+  }
+
+  // UPDATED: Check saved credentials with masking
+  Future<void> _checkSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedAccount = prefs.getString('saved_account_number');
+      final biometricEnabled = prefs.getBool('biometric_enabled') ?? false;
+
+      if (savedAccount != null && biometricEnabled) {
+        setState(() {
+          // Store the actual account number for biometric login but display masked version
+          _actualAccountNumber = savedAccount;
+          _accountController.text = _maskAccountNumber(savedAccount);
+          _showBiometricOption = true;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking saved credentials: $e');
+    }
+  }
+
   @override
   void dispose() {
     _animationController.dispose();
     _accountController.dispose();
-    _mobileController.dispose();
+    _accessCodeController.dispose();
     super.dispose();
+  }
+
+  // Extract CIF from account number (last 7 digits)
+  String _extractCIF(String accountNumber) {
+    if (accountNumber.length >= 7) {
+      return accountNumber.substring(accountNumber.length - 7);
+    }
+    return accountNumber; // Return full number if less than 7 digits
+  }
+
+  // UPDATED: Validate input using actual account number when available
+  bool _validateInput() {
+    final accountToValidate = _actualAccountNumber ?? _accountController.text;
+
+    if (accountToValidate.isEmpty) {
+      _showErrorSnackBar('Please enter your account number');
+      return false;
+    }
+
+    if (accountToValidate.length < 8) {
+      _showErrorSnackBar('Please enter a valid account number');
+      return false;
+    }
+
+    if (_accessCodeController.text.isEmpty) {
+      _showErrorSnackBar('Please enter your access code');
+      return false;
+    }
+
+    if (_accessCodeController.text.length < 4) {
+      _showErrorSnackBar('Please enter a valid access code');
+      return false;
+    }
+
+    return true;
+  }
+
+  // UPDATED: Check if user is registered using actual account number
+  Future<bool> _checkUserRegistration() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final accountToValidate = _actualAccountNumber ?? _accountController.text;
+      final cif = _extractCIF(accountToValidate);
+      final registeredCIFs = prefs.getStringList('registered_cifs') ?? [];
+      return registeredCIFs.contains(cif);
+    } catch (e) {
+      debugPrint('Error checking registration: $e');
+      return false;
+    }
+  }
+
+  // UPDATED: Validate credentials using actual account number
+  Future<bool> _validateCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final accountToValidate = _actualAccountNumber ?? _accountController.text;
+      final cif = _extractCIF(accountToValidate);
+      final savedCode = prefs.getString('access_code_$cif');
+      return savedCode == _accessCodeController.text;
+    } catch (e) {
+      debugPrint('Error validating credentials: $e');
+      return false;
+    }
+  }
+
+  void _proceedToLogin() async {
+    if (!_validateInput()) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      // Simulate API call
+      await Future.delayed(const Duration(seconds: 1));
+
+      // Check if user is registered
+      final isRegistered = await _checkUserRegistration();
+
+      if (!isRegistered) {
+        setState(() => _isLoading = false);
+        _showErrorSnackBar('Account not registered. Please register first.');
+        return;
+      }
+
+      // Validate credentials
+      final isValidCredentials = await _validateCredentials();
+
+      if (!isValidCredentials) {
+        setState(() => _isLoading = false);
+        _showErrorSnackBar('Invalid access code. Please try again.');
+        return;
+      }
+
+      // Check if biometrics setup is complete
+      final prefs = await SharedPreferences.getInstance();
+      final accountToValidate = _actualAccountNumber ?? _accountController.text;
+      final cif = _extractCIF(accountToValidate);
+      final biometricsSetup = prefs.getBool('biometrics_setup_$cif') ?? false;
+
+      setState(() => _isLoading = false);
+
+      if (biometricsSetup) {
+        // Go directly to accounts
+        _navigateToAccounts();
+      } else {
+        // First time login - go to biometrics setup
+        _navigateToBiometricsSetup();
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      _showErrorSnackBar('Login failed. Please try again.');
+    }
+  }
+
+  // UPDATED: Biometric authentication using actual account number
+  Future<void> _authenticateWithBiometrics() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final isAuthenticated = await _localAuth.authenticate(
+        localizedReason: 'Please authenticate to access your account',
+        options: const AuthenticationOptions(
+          biometricOnly: false,
+          stickyAuth: true,
+          useErrorDialogs: true,
+        ),
+      );
+
+      if (isAuthenticated) {
+        // Use the actual account number for validation, not the masked one
+        final accountToValidate =
+            _actualAccountNumber ?? _accountController.text;
+
+        // Check if user is registered using actual account number
+        final prefs = await SharedPreferences.getInstance();
+        final cif = _extractCIF(accountToValidate);
+        final registeredCIFs = prefs.getStringList('registered_cifs') ?? [];
+
+        if (!registeredCIFs.contains(cif)) {
+          setState(() => _isLoading = false);
+          _showErrorSnackBar('Account not registered. Please register first.');
+          return;
+        }
+
+        _showSuccessSnackBar('Biometric authentication successful!');
+        _navigateToAccounts();
+      } else {
+        _showErrorSnackBar('Biometric authentication was cancelled');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Biometric authentication failed');
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  void _navigateToAccounts() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => const MainScreen(),
+        transitionsBuilder: (context, animation, _, child) {
+          const begin = Offset(0.0, 1.0);
+          final tween = Tween(begin: begin, end: Offset.zero)
+              .chain(CurveTween(curve: Curves.easeOutCubic));
+          return SlideTransition(
+              position: animation.drive(tween), child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 700),
+      ),
+      (route) => false,
+    );
+  }
+
+  void _navigateToBiometricsSetup() {
+    final accountToValidate = _actualAccountNumber ?? _accountController.text;
+    final cif = _extractCIF(accountToValidate);
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => BiometricsSetup(
+          accountNumber: accountToValidate,
+          cif: cif,
+          accessCode: _accessCodeController.text,
+        ),
+        transitionsBuilder: (context, animation, _, child) {
+          const begin = Offset(1.0, 0.0);
+          final tween = Tween(begin: begin, end: Offset.zero)
+              .chain(CurveTween(curve: Curves.easeOutCubic));
+          return SlideTransition(
+              position: animation.drive(tween), child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 700),
+      ),
+    );
+  }
+
+  void _navigateToRegistration() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => const RegistrationScreen(),
+        transitionsBuilder: (context, animation, _, child) {
+          const begin = Offset(1.0, 0.0);
+          final tween = Tween(begin: begin, end: Offset.zero)
+              .chain(CurveTween(curve: Curves.easeOut));
+          return SlideTransition(
+              position: animation.drive(tween), child: child);
+        },
+      ),
+    );
+  }
+
+  void _navigateToForgotCode() {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, _) => const ForgotCodeScreen(),
+        transitionsBuilder: (context, animation, _, child) {
+          const begin = Offset(0.0, 1.0);
+          final tween = Tween(begin: begin, end: Offset.zero)
+              .chain(CurveTween(curve: Curves.easeOut));
+          return SlideTransition(
+              position: animation.drive(tween), child: child);
+        },
+      ),
+    );
   }
 
   void _showErrorSnackBar(String message) {
@@ -80,155 +365,24 @@ class _LoginBankingScreenState extends State<LoginBankingScreen>
     );
   }
 
-  bool _validateInput() {
-    if (_accountController.text.isEmpty) {
-      _showErrorSnackBar('Please enter your account number');
-      return false;
-    }
-
-    if (_accountController.text.length < 8) {
-      _showErrorSnackBar('Please enter a valid account number');
-      return false;
-    }
-
-    if (_mobileController.text.isEmpty) {
-      _showErrorSnackBar('Please enter your mobile number');
-      return false;
-    }
-
-    if (_mobileController.text.length < 10) {
-      _showErrorSnackBar('Please enter a valid mobile number');
-      return false;
-    }
-
-    return true;
-  }
-
-  // Check if current session is already verified
-  Future<bool> _isSessionVerified(
-      String mobileNumber, String accountNumber) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final mobile = mobileNumber.replaceAll(RegExp(r'[^0-9]'), '');
-      final account = accountNumber;
-      final sessionKey = '${mobile}_${account}_session'.toLowerCase();
-
-      final timestamp = prefs.getInt('verified_session_$sessionKey');
-      if (timestamp == null) return false;
-
-      // Check if session is still valid (30 days)
-      final sessionTime = DateTime.fromMillisecondsSinceEpoch(timestamp);
-      final now = DateTime.now();
-      final difference = now.difference(sessionTime).inDays;
-
-      return difference <= 30;
-    } catch (e) {
-      debugPrint('Error checking session verification: $e');
-      return false;
+  IconData _getBiometricIcon() {
+    if (_availableBiometrics.contains(BiometricType.face)) {
+      return Icons.face;
+    } else if (_availableBiometrics.contains(BiometricType.fingerprint)) {
+      return Icons.fingerprint;
+    } else {
+      return Icons.security;
     }
   }
 
-  void _proceedToLogin() async {
-    if (!_validateInput()) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      // Simulate API call for account validation (in real app, validate with backend)
-      await Future.delayed(const Duration(seconds: 1));
-
-      // Check if session is already verified
-      final isVerified = await _isSessionVerified(
-        _mobileController.text,
-        _accountController.text,
-      );
-
-      if (mounted) {
-        setState(() => _isLoading = false);
-
-        if (isVerified) {
-          // Skip OTP and go directly to home
-          _showSuccessSnackBar('Welcome back! Logged in successfully.');
-          _navigateDirectlyToHome();
-        } else {
-          // Show OTP verification screen
-          _navigateToOTP();
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showErrorSnackBar('Login failed. Please try again.');
-      }
+  String _getBiometricText() {
+    if (_availableBiometrics.contains(BiometricType.face)) {
+      return 'Face Recognition';
+    } else if (_availableBiometrics.contains(BiometricType.fingerprint)) {
+      return 'Fingerprint';
+    } else {
+      return 'Biometric';
     }
-  }
-
-  void _navigateDirectlyToHome() {
-    Navigator.pushReplacement(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, _) => const HomeScreen2(),
-        transitionsBuilder: (context, animation, _, child) {
-          const begin = Offset(0.0, 1.0);
-          final tween = Tween(begin: begin, end: Offset.zero)
-              .chain(CurveTween(curve: Curves.easeOutCubic));
-          return SlideTransition(
-              position: animation.drive(tween), child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 700),
-      ),
-    );
-  }
-
-  void _navigateToOTP() {
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, _) => OTPVerificationScreen(
-          mobileNumber: _formatMobileNumber(_mobileController.text),
-          accountNumber: _accountController.text,
-        ),
-        transitionsBuilder: (context, animation, _, child) {
-          const begin = Offset(1.0, 0.0);
-          final tween = Tween(begin: begin, end: Offset.zero)
-              .chain(CurveTween(curve: Curves.easeOutCubic));
-          return SlideTransition(
-              position: animation.drive(tween), child: child);
-        },
-        transitionDuration: const Duration(milliseconds: 700),
-      ),
-    );
-  }
-
-  String _formatMobileNumber(String mobile) {
-    // Format mobile number for display (e.g., +94 77 123 4567)
-    if (mobile.startsWith('0')) {
-      mobile = '+94 ${mobile.substring(1)}';
-    } else if (!mobile.startsWith('+94')) {
-      mobile = '+94 $mobile';
-    }
-
-    // Add spacing for better readability
-    if (mobile.length >= 12) {
-      return '${mobile.substring(0, 3)} ${mobile.substring(3, 5)} ${mobile.substring(5, 8)} ${mobile.substring(8)}';
-    }
-    return mobile;
-  }
-
-  void _navigateToRegistration() {
-    Navigator.push(
-      context,
-      PageRouteBuilder(
-        pageBuilder: (context, animation, _) => const RegistrationScreen(),
-        transitionsBuilder: (context, animation, _, child) {
-          const begin = Offset(1.0, 0.0);
-          final tween = Tween(begin: begin, end: Offset.zero)
-              .chain(CurveTween(curve: Curves.easeOut));
-          return SlideTransition(
-              position: animation.drive(tween), child: child);
-        },
-      ),
-    );
   }
 
   @override
@@ -254,13 +408,13 @@ class _LoginBankingScreenState extends State<LoginBankingScreen>
                     const SizedBox(height: 40),
                     _buildAccountNumberField(),
                     const SizedBox(height: 16),
-                    _buildMobileNumberField(),
+                    _buildAccessCodeField(),
                     const SizedBox(height: 30),
-                    _buildContinueButton(),
+                    _buildLoginButtons(),
+                    const SizedBox(height: 30),
+                    _buildActionButtons(),
                     const SizedBox(height: 20),
                     _buildSessionInfo(),
-                    const SizedBox(height: 40),
-                    _buildRegistrationLink(),
                   ],
                 ),
               ),
@@ -318,6 +472,7 @@ class _LoginBankingScreenState extends State<LoginBankingScreen>
     );
   }
 
+  // UPDATED: Account number field with tap and change handlers
   Widget _buildAccountNumberField() {
     return _CustomTextField(
       controller: _accountController,
@@ -329,20 +484,209 @@ class _LoginBankingScreenState extends State<LoginBankingScreen>
         FilteringTextInputFormatter.digitsOnly,
         LengthLimitingTextInputFormatter(16),
       ],
+      onTap: () {
+        // Clear the field if it contains a masked number to allow fresh input
+        if (_actualAccountNumber != null &&
+            _accountController.text.contains('*')) {
+          _accountController.clear();
+          setState(() {
+            _actualAccountNumber = null;
+            _showBiometricOption = false;
+          });
+        }
+      },
+      onChanged: (value) {
+        // If user starts typing, clear the saved account and hide biometric option
+        if (_actualAccountNumber != null) {
+          setState(() {
+            _actualAccountNumber = null;
+            _showBiometricOption = false;
+          });
+        }
+      },
     );
   }
 
-  Widget _buildMobileNumberField() {
+  Widget _buildAccessCodeField() {
     return _CustomTextField(
-      controller: _mobileController,
-      label: 'Mobile Number',
-      hint: '0771234567',
-      icon: Icons.phone_outlined,
-      keyboardType: TextInputType.phone,
+      controller: _accessCodeController,
+      label: 'Access Code',
+      hint: 'Enter your access code',
+      icon: Icons.lock_outline,
+      keyboardType: TextInputType.number,
       inputFormatters: [
         FilteringTextInputFormatter.digitsOnly,
-        LengthLimitingTextInputFormatter(10),
-        _MobileNumberFormatter(),
+        LengthLimitingTextInputFormatter(6),
+      ],
+    );
+  }
+
+  Widget _buildLoginButtons() {
+    return Column(
+      children: [
+        // Regular login button
+        SizedBox(
+          width: double.infinity,
+          height: 56,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _primaryColor,
+              foregroundColor: Colors.black,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
+            ),
+            onPressed: _isLoading ? null : _proceedToLogin,
+            child: _isLoading
+                ? const SizedBox(
+                    height: 24,
+                    width: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                    ),
+                  )
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        'Login',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w500,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.arrow_forward, size: 16),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+
+        // Biometric login button (shown only if available and enabled)
+        if (_showBiometricOption &&
+            _isBiometricAvailable &&
+            _availableBiometrics.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Text(
+                  'OR',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              Expanded(child: Divider(color: Colors.grey.withOpacity(0.3))),
+            ],
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _primaryColor,
+                side: BorderSide(color: _primaryColor),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16)),
+              ),
+              onPressed: _isLoading ? null : _authenticateWithBiometrics,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(_getBiometricIcon(), size: 20),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Login with ${_getBiometricText()}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildActionButtons() {
+    return Row(
+      children: [
+        // Register Button
+        Expanded(
+          child: SizedBox(
+            height: 50,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _primaryColor,
+                side: BorderSide(color: _primaryColor.withOpacity(0.7)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _navigateToRegistration,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.person_add_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Register',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 16),
+        // Forgot Code Button
+        Expanded(
+          child: SizedBox(
+            height: 50,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.orange,
+                side: BorderSide(color: Colors.orange.withOpacity(0.7)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _navigateToForgotCode,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.lock_reset_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Forgot Code',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -365,7 +709,9 @@ class _LoginBankingScreenState extends State<LoginBankingScreen>
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Secure login: OTP required only once every 30 days on this device',
+              _showBiometricOption
+                  ? 'Use biometric authentication for faster login'
+                  : 'Secure login with your account number and access code',
               style: TextStyle(
                 color: Colors.white.withOpacity(0.7),
                 fontSize: 13,
@@ -376,106 +722,29 @@ class _LoginBankingScreenState extends State<LoginBankingScreen>
       ),
     );
   }
-
-  Widget _buildContinueButton() {
-    return SizedBox(
-      width: double.infinity,
-      height: 56,
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: _primaryColor,
-          foregroundColor: Colors.black,
-          elevation: 0,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        ),
-        onPressed: _isLoading ? null : _proceedToLogin,
-        child: _isLoading
-            ? const SizedBox(
-                height: 24,
-                width: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
-                ),
-              )
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Continue',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.1),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.arrow_forward, size: 16),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _buildRegistrationLink() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          "Don't have an account? ",
-          style: TextStyle(
-            color: Colors.white.withOpacity(0.7),
-            fontSize: 14,
-          ),
-        ),
-        GestureDetector(
-          onTap: _navigateToRegistration,
-          child: const Text(
-            'Register',
-            style: TextStyle(
-              color: _primaryColor,
-              fontSize: 14,
-              fontWeight: FontWeight.bold,
-              decoration: TextDecoration.underline,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
-// Custom TextField widget for reusability
+// UPDATED: Custom TextField widget with onTap and onChanged callbacks
 class _CustomTextField extends StatelessWidget {
   const _CustomTextField({
     required this.controller,
     required this.label,
     required this.icon,
     this.hint,
-    this.isPassword = false,
-    this.obscureText,
-    this.onToggleVisibility,
     this.keyboardType,
     this.inputFormatters,
+    this.onTap,
+    this.onChanged,
   });
 
   final TextEditingController controller;
   final String label;
   final String? hint;
   final IconData icon;
-  final bool isPassword;
-  final bool? obscureText;
-  final VoidCallback? onToggleVisibility;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
+  final VoidCallback? onTap;
+  final Function(String)? onChanged;
 
   static const Color _primaryColor = Color(0xFF00FFEB);
   static const Color _containerColor = Color.fromARGB(255, 84, 88, 119);
@@ -490,13 +759,13 @@ class _CustomTextField extends StatelessWidget {
       ),
       child: TextField(
         controller: controller,
-        obscureText: isPassword ? (obscureText ?? false) : false,
         keyboardType: keyboardType,
         inputFormatters: inputFormatters,
         style: const TextStyle(color: Colors.white),
+        onTap: onTap,
+        onChanged: onChanged,
         decoration: InputDecoration(
           prefixIcon: Icon(icon, color: _primaryColor, size: 22),
-          suffixIcon: isPassword ? _buildPasswordToggle() : null,
           labelText: label,
           hintText: hint,
           labelStyle: TextStyle(color: Colors.grey[400], fontSize: 14),
@@ -513,37 +782,30 @@ class _CustomTextField extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildPasswordToggle() {
-    return IconButton(
-      icon: Icon(
-        (obscureText ?? false) ? Icons.visibility_off : Icons.visibility,
-        color: Colors.grey[400],
-        size: 22,
-      ),
-      onPressed: onToggleVisibility,
-    );
-  }
 }
 
-// Mobile number formatter for better UX
-class _MobileNumberFormatter extends TextInputFormatter {
-  @override
-  TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    // Remove any non-digit characters
-    final text = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+// NEW: Enhanced logout function for security
+void clearUserData(BuildContext context) async {
+  final prefs = await SharedPreferences.getInstance();
 
-    // Limit to 10 digits
-    if (text.length > 10) {
-      return oldValue;
+  // Clear all saved credentials
+  await prefs.remove('biometric_enabled');
+  await prefs.remove('saved_account_number');
+
+  // Clear all user-specific data
+  final keys = prefs.getKeys();
+  for (String key in keys) {
+    if (key.startsWith('access_code_') ||
+        key.startsWith('biometrics_setup_') ||
+        key.startsWith('phone_') ||
+        key.startsWith('created_date_')) {
+      await prefs.remove(key);
     }
-
-    return TextEditingValue(
-      text: text,
-      selection: TextSelection.collapsed(offset: text.length),
-    );
   }
+
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(builder: (context) => const LoginBankingScreen()),
+    (route) => false,
+  );
 }

@@ -45,5 +45,9 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Use Face ID to authenticate and access your banking account securely</string>
+	<key>NSBiometricUsageDescription</key>
+	<string>Use biometric authentication to access your banking account securely</string>
 </dict>
 </plist>
